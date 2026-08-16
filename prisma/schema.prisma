@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  DRIVER
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  password     String
+  phone        String?
+  role         Role          @default(CUSTOMER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  reservations Reservation[]
+  orders       Order[]
+  reviews      Review[]
+  driverOrders Order[] @relation("DriverOrders")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Reservation {
+  id              String   @id @default(cuid())
+  name            String
+  email           String
+  phone           String
+  date            DateTime
+  time            String
+  guests          Int
+  specialRequests String?
+  status          String   @default("confirmed") // confirmed | cancelled | completed | no-show
+  createdAt       DateTime @default(now())
+
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+}
+model MenuItem {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  price       Float
+  category    String
+  image       String?
+  createdAt   DateTime    @default(now())
+
+  orderItems  OrderItem[]
+  reviews     Review[]
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  name        String
+  email       String
+  phone       String
+  address     String
+  city        String
+  status      String      @default("pending") // pending | confirmed | preparing | picked_up | on_the_way | delivered | cancelled
+  total       Float
+  createdAt   DateTime    @default(now())
+  confirmedAt DateTime?
+  pickedUpAt  DateTime?
+  deliveredAt DateTime?
+
+  deliveryLat Float?
+  deliveryLng Float?
+
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id])
+
+  driverId    String?
+  driver      User?       @relation("DriverOrders", fields: [driverId], references: [id])
+
+  items       OrderItem[]
+  location    DeliveryLocation?
+}
+
+model DeliveryLocation {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  quantity   Int
+  price      Float
+
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@unique([userId, menuItemId])
+}
