@@ -36,6 +36,7 @@ export default function DriverDashboardPage() {
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const lastSentRef = useRef<number>(0);
+  const activeOrderIdRef = useRef<string | null>(null);
 
   const loadOrders = () => {
     fetch("/api/driver/orders", {
@@ -82,6 +83,8 @@ export default function DriverDashboardPage() {
       return;
     }
 
+    activeOrderIdRef.current = orderId;
+
     try {
       if ("wakeLock" in navigator) {
         wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
@@ -92,13 +95,18 @@ export default function DriverDashboardPage() {
 
     setSharingOrderId(orderId);
 
+    // Clear any existing watcher before starting a new one (avoids duplicate watchers on resume)
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const newPos = { lat: position.coords.latitude, lng: position.coords.longitude };
         setDriverPos(newPos);
 
         const now = Date.now();
-        if (now - lastSentRef.current < 4000) return;
+        if (now - lastSentRef.current < 4000) return; // throttle: max once per 4s
         lastSentRef.current = now;
 
         fetch(`/api/driver/orders/${orderId}/location`, {
@@ -120,6 +128,7 @@ export default function DriverDashboardPage() {
   };
 
   const stopSharing = () => {
+    activeOrderIdRef.current = null;
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
@@ -131,24 +140,18 @@ export default function DriverDashboardPage() {
     setSharingOrderId(null);
   };
 
+  // Auto-resume tracking the instant the driver comes back to this tab
   useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (
-        document.visibilityState === "visible" &&
-        sharingOrderId &&
-        "wakeLock" in navigator
-      ) {
-        try {
-          wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
-        } catch (err) {
-          console.warn("Could not re-acquire wake lock:", err);
-        }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && activeOrderIdRef.current) {
+        startSharing(activeOrderIdRef.current);
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [sharingOrderId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -166,6 +169,7 @@ export default function DriverDashboardPage() {
         <p className="mt-8 text-neutral-500">Loading orders...</p>
       ) : (
         <>
+          {/* My active deliveries */}
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-neutral-900">My Deliveries</h2>
             {mine.length === 0 ? (
@@ -236,6 +240,7 @@ export default function DriverDashboardPage() {
                       )}
                     </div>
 
+                    {/* Driver's own live map + directions */}
                     {sharingOrderId === order.id && order.deliveryLat && order.deliveryLng && (
                       <div className="mt-4 space-y-3">
                         <div className="h-64 w-full overflow-hidden rounded-xl">
@@ -261,6 +266,7 @@ export default function DriverDashboardPage() {
             )}
           </div>
 
+          {/* Available orders */}
           <div className="mt-10">
             <h2 className="text-lg font-semibold text-neutral-900">Available Orders</h2>
             {available.length === 0 ? (

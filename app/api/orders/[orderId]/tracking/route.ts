@@ -50,6 +50,7 @@ export async function GET(
     driverLocation: order.location
       ? { lat: order.location.lat, lng: order.location.lng }
       : null,
+    locationUpdatedAt: order.location?.updatedAt ?? null,
     restaurant: RESTAURANT_LOCATION,
     destination:
       order.deliveryLat && order.deliveryLng

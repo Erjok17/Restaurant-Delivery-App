@@ -8,6 +8,7 @@ type TrackingData = {
   status: string;
   driverName: string | null;
   driverLocation: { lat: number; lng: number } | null;
+  locationUpdatedAt: string | null;
   restaurant: { lat: number; lng: number };
   destination: { lat: number; lng: number } | null;
   distanceKm: number | null;
@@ -28,6 +29,17 @@ const STEPS = [
   { key: "on_the_way", label: "On The Way" },
   { key: "delivered", label: "Delivered" },
 ];
+
+function getFreshnessLabel(updatedAt: string | null): { label: string; isStale: boolean } {
+  if (!updatedAt) return { label: "", isStale: false };
+  const secondsAgo = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 1000);
+
+  if (secondsAgo < 15) return { label: "Live", isStale: false };
+  if (secondsAgo < 60) return { label: `Updated ${secondsAgo}s ago`, isStale: false };
+
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  return { label: `Signal paused — last seen ${minutesAgo} min ago`, isStale: true };
+}
 
 export default function TrackOrderPage() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -69,6 +81,7 @@ export default function TrackOrderPage() {
   }
 
   const activeStepIndex = STEPS.findIndex((s) => s.key === data.status);
+  const freshness = getFreshnessLabel(data.locationUpdatedAt);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
@@ -79,22 +92,17 @@ export default function TrackOrderPage() {
         {STEPS.map((step, i) => (
           <div key={step.key} className="flex flex-1 flex-col items-center text-center">
             <div
-              className={`h-3 w-3 rounded-full ${i <= activeStepIndex ? "bg-gold" : "bg-neutral-200"
-                }`}
+              className={`h-3 w-3 rounded-full ${
+                i <= activeStepIndex ? "bg-gold" : "bg-neutral-200"
+              }`}
             />
             <p
-              className={`mt-2 text-[11px] font-medium ${i <= activeStepIndex ? "text-gold-dark" : "text-neutral-400"
-                }`}
+              className={`mt-2 text-[11px] font-medium ${
+                i <= activeStepIndex ? "text-gold-dark" : "text-neutral-400"
+              }`}
             >
               {step.label}
             </p>
-            {i < STEPS.length - 1 && (
-              <div
-                className={`absolute mt-1.5 h-[2px] w-full translate-x-1/2 ${i < activeStepIndex ? "bg-gold" : "bg-neutral-200"
-                  }`}
-                style={{ display: "none" }}
-              />
-            )}
           </div>
         ))}
       </div>
@@ -110,6 +118,18 @@ export default function TrackOrderPage() {
               {data.etaMinutes} min <span className="text-sm font-normal text-neutral-500">away</span>
             </p>
           )}
+          <p
+            className={`mt-2 flex items-center gap-1.5 text-xs ${
+              freshness.isStale ? "text-orange-600" : "text-green-600"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                freshness.isStale ? "bg-orange-500" : "animate-pulse bg-green-500"
+              }`}
+            />
+            {freshness.label}
+          </p>
         </div>
       )}
 
