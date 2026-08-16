@@ -40,8 +40,11 @@ export default function CheckoutPage() {
         });
         setLocationStatus("done");
       },
-      () => setLocationStatus("error"),
-      { enableHighAccuracy: true }
+      (err) => {
+        console.error("Location error:", { code: err?.code, message: err?.message, raw: err });
+        setLocationStatus("error");
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
     );
   };
 

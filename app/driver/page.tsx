@@ -77,36 +77,30 @@ export default function DriverDashboardPage() {
     if (status === "delivered") stopSharing();
   };
 
-  const startSharing = async (orderId: string) => {
+  const startSharing = (orderId: string) => {
     if (!navigator.geolocation) {
       alert("Geolocation isn't supported on this device.");
       return;
     }
 
     activeOrderIdRef.current = orderId;
-
-    try {
-      if ("wakeLock" in navigator) {
-        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
-      }
-    } catch (err) {
-      console.warn("Wake lock not available:", err);
-    }
-
     setSharingOrderId(orderId);
 
-    // Clear any existing watcher before starting a new one (avoids duplicate watchers on resume)
+    // Clear any existing watcher before starting a new one
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
     }
 
+    // IMPORTANT: this must be called synchronously, directly from the click,
+    // with nothing awaited beforehand — otherwise mobile browsers (especially iOS)
+    // silently reject it since it no longer looks like a direct user action.
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const newPos = { lat: position.coords.latitude, lng: position.coords.longitude };
         setDriverPos(newPos);
 
         const now = Date.now();
-        if (now - lastSentRef.current < 4000) return; // throttle: max once per 4s
+        if (now - lastSentRef.current < 4000) return;
         lastSentRef.current = now;
 
         fetch(`/api/driver/orders/${orderId}/location`, {
@@ -122,9 +116,30 @@ export default function DriverDashboardPage() {
           })
           .catch((err) => console.warn("Location fetch error:", err));
       },
-      (err) => console.error("Location error:", { code: err.code, message: err.message }),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      (err) => {
+        console.error("Location error:", {
+          code: err?.code,
+          message: err?.message,
+          raw: err,
+        });
+        alert(
+          err?.code === 1
+            ? "Location permission was denied. Please enable location access for this site in your browser settings."
+            : "Couldn't get your location. Please check your device's location settings."
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
+
+    // Request wake lock AFTER geolocation is already running — this can be async safely
+    if ("wakeLock" in navigator) {
+      (navigator as any).wakeLock
+        .request("screen")
+        .then((lock: WakeLockSentinel) => {
+          wakeLockRef.current = lock;
+        })
+        .catch((err: any) => console.warn("Wake lock not available:", err));
+    }
   };
 
   const stopSharing = () => {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
-const VALID = ["confirmed", "preparing", "cancelled"];
+const VALID = ["pending", "confirmed", "preparing", "cancelled"];
 
 export async function PATCH(
   req: NextRequest,
